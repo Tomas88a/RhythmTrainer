@@ -2,13 +2,11 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, Pause, RefreshCw, Volume2, Power, Minus, Plus, Settings, BookOpen, X } from 'lucide-react';
 
 /**
- * Rhythm Cards Trainer - Field Ops Edition v2.2
- * Features:
- * - Mobile Layout Fix: 2x2 grid on mobile, 1x4 on desktop.
- * - Dynamic Card Sizing: Cards fill grid cells automatically.
- * - "Training Mode": Random shuffle.
- * - "Library Mode": Rhythm dictionary.
- * - Audio: Dual-layer engine.
+ * Rhythm Cards Trainer - Field Ops Edition v2.3
+ * Fixes:
+ * - Mobile aspect ratio changed to 3:4 (vertical) to prevent squashing cards.
+ * - Desktop aspect ratio remains 4:3 (horizontal).
+ * - Optimized card padding for small screens.
  */
 
 // --- Audio Engine ---
@@ -25,8 +23,7 @@ class MetronomeEngine {
     this.beatCount = 0; 
     this.visualQueue = [];
     
-    // For Tutorial Mode
-    this.activePatternTimings = null; // Array of offsets [0, 0.5, etc.]
+    this.activePatternTimings = null;
   }
 
   nextNote() {
@@ -35,21 +32,17 @@ class MetronomeEngine {
     this.beatCount = (this.beatCount + 1) % 4;
   }
 
-  // Base Metronome Click (The Grid)
   scheduleMetronomeClick(time) {
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
 
     osc.type = 'square'; 
-    
-    // Distinct "Tick Tock" sound
     if (this.beatCount === 0) {
         osc.frequency.value = 1200; 
     } else {
         osc.frequency.value = 800;  
     }
     
-    // Metronome is slightly quieter in Library mode to let the pattern shine
     const vol = Math.max(0.001, this.volume * 0.6);
 
     gain.gain.setValueAtTime(0, time);
@@ -63,16 +56,14 @@ class MetronomeEngine {
     osc.stop(time + 0.05);
   }
 
-  // Pattern Playback Sound (The Rhythm)
   schedulePatternSound(time) {
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
 
-    // Use a different waveform/pitch for the rhythm itself so it stands out
     osc.type = 'triangle'; 
-    osc.frequency.value = 600; // Melodic/Percussive tone
+    osc.frequency.value = 600; 
     
-    const vol = Math.max(0.001, this.volume); // Full volume
+    const vol = Math.max(0.001, this.volume);
 
     gain.gain.setValueAtTime(0, time);
     gain.gain.linearRampToValueAtTime(vol, time + 0.005); 
@@ -89,20 +80,15 @@ class MetronomeEngine {
     while (this.nextNoteTime < this.ctx.currentTime + this.scheduleAheadTime) {
       const secondsPerBeat = 60.0 / this.tempo;
 
-      // 1. Schedule Base Metronome
       this.scheduleMetronomeClick(this.nextNoteTime);
       
-      // 2. Schedule Active Pattern (if any)
-      // We schedule the pattern sub-beats relative to the current main beat
       if (this.activePatternTimings && this.activePatternTimings.length > 0) {
           this.activePatternTimings.forEach(offset => {
-              // offset is in beats (0, 0.5, 0.75)
               const noteTime = this.nextNoteTime + (offset * secondsPerBeat);
               this.schedulePatternSound(noteTime);
           });
       }
 
-      // Visuals
       this.visualQueue.push({ 
           noteTime: this.nextNoteTime, 
           beat: this.beatCount 
@@ -115,11 +101,7 @@ class MetronomeEngine {
 
   async start() {
     if (this.isPlaying) return;
-
-    if (this.ctx.state === 'suspended') {
-      await this.ctx.resume();
-    }
-
+    if (this.ctx.state === 'suspended') await this.ctx.resume();
     this.isPlaying = true;
     this.beatCount = 0; 
     this.visualQueue = []; 
@@ -149,7 +131,7 @@ class MetronomeEngine {
   }
 }
 
-// --- Visual Components (Waveform & Cards) ---
+// --- Visual Components ---
 
 const RetroWaveform = ({ isPlaying, beat, activePattern }) => {
   const [points, setPoints] = useState('');
@@ -165,9 +147,7 @@ const RetroWaveform = ({ isPlaying, beat, activePattern }) => {
             let noise = (Math.random() - 0.5) * 3;
             
             if (isPlaying) {
-                // If a pattern is selected, make the wave look more complex/excited everywhere
                 const excitement = activePattern ? 2 : 1; 
-                
                 const sectionSize = totalPoints / 4;
                 const activeStart = beat * sectionSize;
                 const activeEnd = (beat + 1) * sectionSize;
@@ -370,7 +350,6 @@ const PhosphorCard = ({ pattern, isNew, index, onClick, isActive, minimal = fals
     <div className="absolute inset-0 opacity-10 pointer-events-none" 
         style={{ backgroundImage: 'linear-gradient(rgba(0,0,0,0) 50%, rgba(0,0,0,0.5) 50%)', backgroundSize: '100% 4px' }}></div>
     
-    {/* SVG Container: Grows to fill available space */}
     <div className={`flex-1 flex items-center justify-center text-[#33ff00] w-full p-2`}
            style={{ filter: isActive ? 'drop-shadow(0 0 4px rgba(51, 255, 0, 0.8))' : 'none' }}>
         <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible" preserveAspectRatio="xMidYMid meet">
@@ -378,7 +357,6 @@ const PhosphorCard = ({ pattern, isNew, index, onClick, isActive, minimal = fals
         </svg>
     </div>
 
-    {/* Text Label: Fixed size at bottom */}
     {!minimal && (
       <div className="h-auto shrink-0 w-full text-center pb-2 px-1">
         <div className="text-[9px] md:text-[10px] font-mono font-bold text-[#33ff00] tracking-widest bg-[#33ff00]/10 py-1 rounded-sm truncate">
@@ -637,7 +615,8 @@ export default function RhythmCardsApp() {
         {/* --- MAIN SCREEN AREA --- */}
         <div className="px-6 mb-6">
             <div className="bg-[#000] rounded-lg p-1 shadow-[inset_0_2px_10px_rgba(0,0,0,1)] border-b border-white/10">
-                <div className="bg-[#050805] rounded border border-[#222] relative overflow-hidden w-full aspect-[4/3] flex flex-col">
+                {/* Fixed Aspect Ratio: 3:4 on Mobile, 4:3 on Desktop */}
+                <div className="bg-[#050805] rounded border border-[#222] relative overflow-hidden w-full aspect-[3/4] md:aspect-[4/3] flex flex-col">
                     <div className="absolute inset-0 z-20 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.1)_50%)] bg-[length:100%_4px] opacity-30"></div>
                     <div className="absolute inset-0 z-20 pointer-events-none bg-[radial-gradient(circle_at_center,transparent_50%,rgba(0,0,0,0.6)_100%)]"></div>
 
