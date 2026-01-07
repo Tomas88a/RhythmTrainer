@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, Pause, RefreshCw, Volume2, Power, Minus, Plus, Settings, BookOpen, X, PlayCircle } from 'lucide-react';
 
 /**
- * Rhythm Cards Trainer - Field Ops Edition v2.7
+ * Rhythm Cards Trainer - Field Ops Edition v2.8
  * Fixes:
- * 1. Mobile Train Mode: Increased card padding to shrink SVG size and prevent border clipping.
- * 2. Mobile Lib Mode: Significantly increased bottom padding (pb-32) to ensure the last row is fully visible when scrolled.
+ * 1. Mobile Card Sizing: Drastically increased internal padding (p-6) on mobile cards to shrink SVGs and prevent clipping.
+ * 2. Mobile Library: Increased bottom padding (pb-48) to guarantee visibility of the last row.
+ * 3. General Layout: Added grid padding to prevent cards from touching screen edges.
  */
 
 // --- Audio Engine (Unchanged) ---
@@ -200,8 +201,8 @@ const PhosphorCard = ({ pattern, isNew, index, onClick, isActive, minimal = fals
     <div className="absolute inset-0 opacity-10 pointer-events-none" 
         style={{ backgroundImage: 'linear-gradient(rgba(0,0,0,0) 50%, rgba(0,0,0,0.5) 50%)', backgroundSize: '100% 4px' }}></div>
     
-    {/* SVG Container: Increased Padding here (p-3) to shrink SVG */}
-    <div className={`flex-1 flex items-center justify-center text-[#33ff00] w-full min-h-0 ${minimal ? 'p-2' : 'p-3 md:p-4'}`}
+    {/* SVG Container: Drastically increased padding 'p-6' on mobile to force SVG to shrink */}
+    <div className={`flex-1 flex items-center justify-center text-[#33ff00] w-full min-h-0 ${minimal ? 'p-2' : 'p-6 md:p-4'}`}
            style={{ filter: (isActive || isPlayingSeq) ? 'drop-shadow(0 0 4px rgba(51, 255, 0, 0.8))' : 'none' }}>
         <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible" preserveAspectRatio="xMidYMid meet">
           {pattern.render()}
@@ -423,7 +424,7 @@ export default function RhythmCardsApp() {
 
                     <div className="flex-1 relative z-10 p-2 md:p-4">
                         {screen === 'training' && (
-                            <div className="w-full h-full grid grid-cols-2 grid-rows-2 md:grid-cols-4 md:grid-rows-1 gap-2 md:gap-4">
+                            <div className="w-full h-full grid grid-cols-2 grid-rows-2 md:grid-cols-4 md:grid-rows-1 gap-3 md:gap-4 p-4 md:p-0"> {/* Added gap-3 and p-4 */}
                                 {cards.map((card, index) => (
                                     <PhosphorCard 
                                         key={card.uid || index} 
@@ -436,7 +437,7 @@ export default function RhythmCardsApp() {
                             </div>
                         )}
                         {screen === 'library' && (
-                            <div className="w-full h-full overflow-y-auto custom-scrollbar pb-32"> {/* Increased padding bottom significantly */}
+                            <div className="w-full h-full overflow-y-auto custom-scrollbar pb-48"> {/* Significantly increased bottom padding */}
                                 <div className="grid grid-cols-3 gap-2">
                                     {Object.keys(PATTERNS).map((key) => (
                                         <PhosphorCard key={key} pattern={PATTERNS[key]} isActive={activeLibraryPattern === key} onClick={() => handlePatternClick(key)} minimal={true} />
