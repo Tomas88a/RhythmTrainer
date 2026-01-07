@@ -2,12 +2,13 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, Pause, RefreshCw, Volume2, Power, Minus, Plus, Settings, BookOpen, X } from 'lucide-react';
 
 /**
- * Rhythm Cards Trainer - Field Ops Edition v2.1
+ * Rhythm Cards Trainer - Field Ops Edition v2.2
  * Features:
- * - "Training Mode": Random shuffle of cards.
- * - "Library Mode": Interactive rhythm dictionary with playback.
- * - Dual-layer Audio: Metronome (Base) + Pattern (Overlay).
- * - UI Update: Enhanced Mode Switcher visibility.
+ * - Mobile Layout Fix: 2x2 grid on mobile, 1x4 on desktop.
+ * - Dynamic Card Sizing: Cards fill grid cells automatically.
+ * - "Training Mode": Random shuffle.
+ * - "Library Mode": Rhythm dictionary.
+ * - Audio: Dual-layer engine.
  */
 
 // --- Audio Engine ---
@@ -207,7 +208,7 @@ const RetroWaveform = ({ isPlaying, beat, activePattern }) => {
   );
 };
 
-// --- Rhythm Patterns Data (With TIMINGS) ---
+// --- Rhythm Patterns Data ---
 const PATTERNS = {
   quarter: {
     id: 'quarter',
@@ -358,10 +359,9 @@ const PhosphorCard = ({ pattern, isNew, index, onClick, isActive, minimal = fals
   <div 
     onClick={onClick}
     className={`
-    flex flex-col items-center justify-center 
+    flex flex-col items-center justify-between
     relative overflow-hidden bg-[#0d120d] border rounded cursor-pointer select-none
-    transition-all duration-200
-    ${minimal ? 'aspect-square' : 'aspect-[3/4]'}
+    transition-all duration-200 w-full h-full
     ${isActive 
         ? 'border-[#33ff00] bg-[#1a2e1a] shadow-[0_0_15px_rgba(51,255,0,0.4)] z-10 scale-105' 
         : 'border-[#33ff00]/20 hover:border-[#33ff00]/60 hover:bg-[#33ff00]/10 opacity-80'}
@@ -370,19 +370,22 @@ const PhosphorCard = ({ pattern, isNew, index, onClick, isActive, minimal = fals
     <div className="absolute inset-0 opacity-10 pointer-events-none" 
         style={{ backgroundImage: 'linear-gradient(rgba(0,0,0,0) 50%, rgba(0,0,0,0.5) 50%)', backgroundSize: '100% 4px' }}></div>
     
-    <div className="w-full h-full p-2 flex flex-col items-center justify-center relative z-10">
-      <div className={`flex items-center justify-center text-[#33ff00] ${minimal ? 'w-full h-full' : 'w-full h-2/3'}`}
+    {/* SVG Container: Grows to fill available space */}
+    <div className={`flex-1 flex items-center justify-center text-[#33ff00] w-full p-2`}
            style={{ filter: isActive ? 'drop-shadow(0 0 4px rgba(51, 255, 0, 0.8))' : 'none' }}>
-        <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
+        <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible" preserveAspectRatio="xMidYMid meet">
           {pattern.render()}
         </svg>
-      </div>
-      {!minimal && (
-        <div className="text-[10px] font-mono font-bold text-[#33ff00] mt-3 w-full text-center tracking-widest bg-[#33ff00]/10 py-1 rounded-sm">
+    </div>
+
+    {/* Text Label: Fixed size at bottom */}
+    {!minimal && (
+      <div className="h-auto shrink-0 w-full text-center pb-2 px-1">
+        <div className="text-[9px] md:text-[10px] font-mono font-bold text-[#33ff00] tracking-widest bg-[#33ff00]/10 py-1 rounded-sm truncate">
             {pattern.name}
         </div>
-      )}
-    </div>
+      </div>
+    )}
   </div>
 );
 
@@ -634,19 +637,20 @@ export default function RhythmCardsApp() {
         {/* --- MAIN SCREEN AREA --- */}
         <div className="px-6 mb-6">
             <div className="bg-[#000] rounded-lg p-1 shadow-[inset_0_2px_10px_rgba(0,0,0,1)] border-b border-white/10">
-                <div className="bg-[#050805] rounded border border-[#222] relative overflow-hidden min-h-[300px] flex flex-col">
+                <div className="bg-[#050805] rounded border border-[#222] relative overflow-hidden w-full aspect-[4/3] flex flex-col">
                     <div className="absolute inset-0 z-20 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.1)_50%)] bg-[length:100%_4px] opacity-30"></div>
                     <div className="absolute inset-0 z-20 pointer-events-none bg-[radial-gradient(circle_at_center,transparent_50%,rgba(0,0,0,0.6)_100%)]"></div>
 
                     {/* Screen Header Info */}
-                    <div className="absolute top-3 left-4 right-4 flex justify-between text-[#33ff00] font-mono text-[9px] z-10 opacity-70 border-b border-[#33ff00]/20 pb-2">
-                        <span>{screen === 'training' ? `MODE: ${difficulty.toUpperCase()}` : 'MODE: LIBRARY (CLICK TO PLAY)'}</span>
+                    <div className="absolute top-2 left-3 right-3 flex justify-between text-[#33ff00] font-mono text-[8px] md:text-[9px] z-10 opacity-70 border-b border-[#33ff00]/20 pb-1">
+                        <span>{screen === 'training' ? `MODE: ${difficulty.toUpperCase()}` : 'MODE: LIBRARY'}</span>
                         <span>CLK: {bpm}</span>
                     </div>
 
                     {/* CONTENT: TRAINING MODE */}
+                    {/* Fixed: Mobile uses 2x2 grid, Desktop uses 1x4 */}
                     {screen === 'training' && (
-                        <div className="absolute inset-0 top-10 p-4 grid grid-cols-2 md:grid-cols-4 gap-2 z-10 h-[240px]">
+                        <div className="absolute inset-0 top-8 bottom-12 px-2 md:px-4 grid grid-cols-2 grid-rows-2 md:grid-cols-4 md:grid-rows-1 gap-2 md:gap-2 z-10 items-center justify-center">
                             {cards.map((card, index) => (
                                 <PhosphorCard key={card.uid || index} pattern={card} isNew={animateCards} index={index} />
                             ))}
@@ -655,8 +659,8 @@ export default function RhythmCardsApp() {
 
                     {/* CONTENT: LIBRARY MODE */}
                     {screen === 'library' && (
-                        <div className="absolute inset-0 top-10 p-4 z-10 overflow-y-auto custom-scrollbar">
-                            <div className="grid grid-cols-3 gap-2 pb-12">
+                        <div className="absolute inset-0 top-8 bottom-12 px-2 md:px-4 z-10 overflow-y-auto custom-scrollbar">
+                            <div className="grid grid-cols-3 gap-2 pb-4">
                                 {Object.keys(PATTERNS).map((key) => (
                                     <PhosphorCard 
                                         key={key} 
@@ -670,8 +674,10 @@ export default function RhythmCardsApp() {
                         </div>
                     )}
 
-                    {/* WAVEFORM COMPONENT */}
-                    <RetroWaveform isPlaying={isPlaying} beat={beatIndicator} activePattern={activeLibraryPattern} />
+                    {/* WAVEFORM COMPONENT - Fixed height ratio */}
+                    <div className="absolute bottom-0 left-0 w-full h-[15%] pointer-events-none z-0 overflow-hidden rounded-b-lg">
+                         <RetroWaveform isPlaying={isPlaying} beat={beatIndicator} activePattern={activeLibraryPattern} />
+                    </div>
                 </div>
             </div>
         </div>
