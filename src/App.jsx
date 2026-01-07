@@ -1,15 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, Pause, RefreshCw, Volume2, Power, Minus, Plus, Settings, BookOpen, X } from 'lucide-react';
+import { Play, Pause, RefreshCw, Volume2, Power, Minus, Plus, Settings, BookOpen, X, PlayCircle } from 'lucide-react';
 
 /**
- * Rhythm Cards Trainer - Field Ops Edition v2.4 (Mobile Fit)
- * Fixes:
- * - Removed fixed aspect ratios.
- * - Used Flexbox to force app to fit exactly within the viewport (no scrolling).
- * - Cards now auto-resize to fit the available screen area.
+ * Rhythm Cards Trainer - Field Ops Edition v2.6
+ * Updates:
+ * 1. Added "PLAY SEQ" button in Train Mode: Plays the 4 displayed cards in sequence.
+ * 2. Fixed Mobile Library Scrolling: Added extra padding to ensure bottom cards aren't obscured.
  */
 
-// --- Audio Engine (Unchanged) ---
+// --- Audio Engine ---
 class MetronomeEngine {
   constructor() {
     this.ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -22,7 +21,9 @@ class MetronomeEngine {
     this.volume = 0.5; 
     this.beatCount = 0; 
     this.visualQueue = [];
-    this.activePatternTimings = null;
+    
+    this.activePatternTimings = null; // Single pattern repeating (Lib mode)
+    this.activeSequence = null;       // Array of 4 patterns (Train mode)
   }
 
   nextNote() {
@@ -68,13 +69,29 @@ class MetronomeEngine {
   scheduler() {
     while (this.nextNoteTime < this.ctx.currentTime + this.scheduleAheadTime) {
       const secondsPerBeat = 60.0 / this.tempo;
+
+      // 1. Metronome Tick
       this.scheduleMetronomeClick(this.nextNoteTime);
-      if (this.activePatternTimings && this.activePatternTimings.length > 0) {
+      
+      // 2. Pattern Playback
+      // Priority A: Sequence (Train Mode) - Play specific pattern for current beat
+      if (this.activeSequence && this.activeSequence.length === 4) {
+          const currentPatternTimings = this.activeSequence[this.beatCount];
+          if (currentPatternTimings) {
+              currentPatternTimings.forEach(offset => {
+                  const noteTime = this.nextNoteTime + (offset * secondsPerBeat);
+                  this.schedulePatternSound(noteTime);
+              });
+          }
+      } 
+      // Priority B: Single Pattern (Library Mode) - Repeat same pattern every beat
+      else if (this.activePatternTimings && this.activePatternTimings.length > 0) {
           this.activePatternTimings.forEach(offset => {
               const noteTime = this.nextNoteTime + (offset * secondsPerBeat);
               this.schedulePatternSound(noteTime);
           });
       }
+
       this.visualQueue.push({ noteTime: this.nextNoteTime, beat: this.beatCount });
       this.nextNote();
     }
@@ -102,12 +119,19 @@ class MetronomeEngine {
 
   setTempo(bpm) { this.tempo = bpm; }
   setVolume(vol) { this.volume = vol; }
-  setActivePattern(timings) { this.activePatternTimings = timings; }
+  setActivePattern(timings) { 
+      this.activePatternTimings = timings; 
+      this.activeSequence = null; // Clear sequence if pattern is set
+  }
+  setActiveSequence(sequence) {
+      this.activeSequence = sequence;
+      this.activePatternTimings = null; // Clear pattern if sequence is set
+  }
 }
 
 // --- Visual Components ---
 
-const RetroWaveform = ({ isPlaying, beat, activePattern }) => {
+const RetroWaveform = ({ isPlaying, beat, activePattern, isSequencePlaying }) => {
   const [points, setPoints] = useState('');
   useEffect(() => {
     let animationFrameId;
@@ -119,7 +143,9 @@ const RetroWaveform = ({ isPlaying, beat, activePattern }) => {
             let y = 50; 
             let noise = (Math.random() - 0.5) * 3;
             if (isPlaying) {
-                const excitement = activePattern ? 2 : 1; 
+                // Visualize excitement if ANY pattern is playing
+                const excitement = (activePattern || isSequencePlaying) ? 2 : 1; 
+                
                 const sectionSize = totalPoints / 4;
                 const activeStart = beat * sectionSize;
                 const activeEnd = (beat + 1) * sectionSize;
@@ -141,7 +167,7 @@ const RetroWaveform = ({ isPlaying, beat, activePattern }) => {
     };
     renderWave();
     return () => cancelAnimationFrame(animationFrameId);
-  }, [isPlaying, beat, activePattern]);
+  }, [isPlaying, beat, activePattern, isSequencePlaying]);
 
   return (
     <div className="absolute bottom-0 left-0 w-full h-12 pointer-events-none z-0 overflow-hidden rounded-b-lg">
@@ -165,31 +191,32 @@ const PATTERNS = {
   syncopation16: { id: 'syncopation16', name: 'Sync', timings: [0, 0.25, 0.75], render: () => (<g stroke="currentColor" fill="currentColor" strokeWidth="3"><ellipse cx="20" cy="70" rx="8" ry="6" transform="rotate(-15 20 70)" /><line x1="28" y1="70" x2="28" y2="20" strokeWidth="3"/><ellipse cx="50" cy="70" rx="8" ry="6" transform="rotate(-15 50 70)" /><line x1="58" y1="70" x2="58" y2="20" strokeWidth="3"/><ellipse cx="80" cy="70" rx="8" ry="6" transform="rotate(-15 80 70)" /><line x1="88" y1="70" x2="88" y2="20" strokeWidth="3"/><line x1="28" y1="20" x2="88" y2="20" strokeWidth="7" /><line x1="28" y1="32" x2="38" y2="32" strokeWidth="6" /><line x1="78" y1="32" x2="88" y2="32" strokeWidth="6" /></g>) }
 };
 
-const PhosphorCard = ({ pattern, isNew, index, onClick, isActive, minimal = false }) => (
+const PhosphorCard = ({ pattern, isNew, index, onClick, isActive, minimal = false, isPlayingSeq = false }) => (
   <div 
     onClick={onClick}
     className={`
     flex flex-col items-center justify-between
     relative overflow-hidden bg-[#0d120d] border rounded cursor-pointer select-none
     transition-all duration-200 w-full h-full
-    ${isActive 
-        ? 'border-[#33ff00] bg-[#1a2e1a] shadow-[0_0_15px_rgba(51,255,0,0.4)] z-10 scale-105' 
+    ${isActive || isPlayingSeq
+        ? 'border-[#33ff00] bg-[#1a2e1a] shadow-[0_0_15px_rgba(51,255,0,0.4)] z-10' 
         : 'border-[#33ff00]/20 hover:border-[#33ff00]/60 hover:bg-[#33ff00]/10 opacity-80'}
-    ${!isActive && !minimal && !isNew ? 'opacity-40 grayscale' : ''}
+    ${!isActive && !isPlayingSeq && !minimal && !isNew ? 'opacity-40 grayscale' : ''}
+    ${isPlayingSeq ? 'scale-105' : ''}
   `}>
     <div className="absolute inset-0 opacity-10 pointer-events-none" 
         style={{ backgroundImage: 'linear-gradient(rgba(0,0,0,0) 50%, rgba(0,0,0,0.5) 50%)', backgroundSize: '100% 4px' }}></div>
     
-    <div className={`flex-1 flex items-center justify-center text-[#33ff00] w-full p-2`}
-           style={{ filter: isActive ? 'drop-shadow(0 0 4px rgba(51, 255, 0, 0.8))' : 'none' }}>
+    <div className={`flex-1 flex items-center justify-center text-[#33ff00] w-full min-h-0 ${minimal ? 'p-1' : 'p-1 md:p-2'}`}
+           style={{ filter: (isActive || isPlayingSeq) ? 'drop-shadow(0 0 4px rgba(51, 255, 0, 0.8))' : 'none' }}>
         <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible" preserveAspectRatio="xMidYMid meet">
           {pattern.render()}
         </svg>
     </div>
 
     {!minimal && (
-      <div className="h-auto shrink-0 w-full text-center pb-2 px-1">
-        <div className="text-[9px] md:text-[10px] font-mono font-bold text-[#33ff00] tracking-widest bg-[#33ff00]/10 py-1 rounded-sm truncate">
+      <div className="h-auto shrink-0 w-full text-center pb-1.5 md:pb-2 px-1">
+        <div className={`text-[8px] md:text-[10px] font-mono font-bold tracking-widest py-0.5 md:py-1 rounded-sm truncate transition-colors ${isPlayingSeq ? 'bg-[#33ff00] text-black' : 'bg-[#33ff00]/10 text-[#33ff00]'}`}>
             {pattern.name}
         </div>
       </div>
@@ -252,6 +279,7 @@ export default function RhythmCardsApp() {
   const [bpm, setBpm] = useState(60);
   const [volume, setVolume] = useState(75);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isSequencePlaying, setIsSequencePlaying] = useState(false); // New State for Sequence
   const [animateCards, setAnimateCards] = useState(false);
   const [beatIndicator, setBeatIndicator] = useState(0); 
   const [activeLibraryPattern, setActiveLibraryPattern] = useState(null);
@@ -264,6 +292,9 @@ export default function RhythmCardsApp() {
 
   const generateCards = useCallback(() => {
     setAnimateCards(false);
+    setIsSequencePlaying(false); // Stop sequence on shuffle
+    if (metronomeRef.current) metronomeRef.current.setActiveSequence(null);
+
     setTimeout(() => {
       const basic = ['quarter', 'eighthPair', 'sixteenthQuad'];
       const advanced = [...basic, 'front8Back16', 'front16Back8', 'triplet'];
@@ -305,6 +336,7 @@ export default function RhythmCardsApp() {
     if (isPlaying) {
       metronomeRef.current.stop();
       setIsPlaying(false);
+      setIsSequencePlaying(false); // Reset sequence state on stop
       setBeatIndicator(0);
     } else {
       metronomeRef.current.setTempo(bpm);
@@ -316,6 +348,25 @@ export default function RhythmCardsApp() {
   const adjustBpm = (delta) => {
     const newBpm = Math.min(180, Math.max(40, bpm + delta));
     setBpm(newBpm);
+  };
+
+  // --- Train Mode: Play Sequence Logic ---
+  const toggleSequence = async () => {
+      if (isSequencePlaying) {
+          setIsSequencePlaying(false);
+          metronomeRef.current.setActiveSequence(null);
+      } else {
+          // Extract pattern timings from the 4 displayed cards
+          const sequenceTimings = cards.map(card => card.timings);
+          metronomeRef.current.setActiveSequence(sequenceTimings);
+          setIsSequencePlaying(true);
+          // Ensure metronome is running
+          if (!isPlaying) {
+              metronomeRef.current.setTempo(bpm);
+              await metronomeRef.current.start();
+              setIsPlaying(true);
+          }
+      }
   };
 
   const handlePatternClick = (patternKey) => {
@@ -332,22 +383,24 @@ export default function RhythmCardsApp() {
   const switchScreen = (newScreen) => {
       setScreen(newScreen);
       setActiveLibraryPattern(null);
-      if (metronomeRef.current) metronomeRef.current.setActivePattern(null);
+      setIsSequencePlaying(false); // Stop sequence when switching
+      if (metronomeRef.current) {
+          metronomeRef.current.setActivePattern(null);
+          metronomeRef.current.setActiveSequence(null);
+      }
   };
 
   return (
     <div className="fixed inset-0 bg-[#111] flex items-center justify-center overflow-hidden font-sans select-none">
       <div className="fixed inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#555 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
 
-      {/* Main Device Case: Fits within viewport using Flexbox */}
       <div className="relative w-full h-full md:w-auto md:h-auto md:max-h-[90vh] md:aspect-[3/5] md:max-w-md bg-[#2e302e] md:rounded-[2rem] shadow-2xl overflow-hidden flex flex-col border-t border-white/5 md:border-b-4 border-black/40">
         
-        {/* Texture & Screws (Absolute) */}
         <div className="absolute inset-0 opacity-5 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]"></div>
         <div className="absolute top-3 left-3"><Screw /></div>
         <div className="absolute top-3 right-3"><Screw /></div>
         
-        {/* HEADER SECTION (Fixed Height) */}
+        {/* HEADER */}
         <div className="shrink-0 px-6 pt-8 pb-4 flex justify-between items-end z-10">
             <div className="flex flex-col">
                 <div className="text-[9px] font-bold text-[#666] uppercase tracking-[0.3em] mb-1">Made by Tmx</div>
@@ -356,7 +409,6 @@ export default function RhythmCardsApp() {
                     <span className="font-black text-xl text-[#ccc] tracking-tighter italic">RHYTHM<span className="text-[#e06c28]">.OS</span></span>
                 </div>
             </div>
-            {/* Mode Switcher */}
             <div className="flex bg-[#1a1a1a] p-1 rounded-lg border border-white/10 shadow-inner">
                 <button onClick={() => switchScreen('training')} className={`flex items-center gap-2 px-3 py-1.5 rounded transition-all font-mono text-[10px] font-bold uppercase tracking-wider ${screen === 'training' ? 'bg-[#e06c28] text-white shadow-[0_1px_4px_rgba(224,108,40,0.4)]' : 'text-[#666] hover:text-[#999] hover:bg-[#252525]'}`}><RefreshCw size={14} /><span>TRAIN</span></button>
                 <div className="w-[1px] bg-white/5 my-1 mx-1"></div>
@@ -364,31 +416,35 @@ export default function RhythmCardsApp() {
             </div>
         </div>
 
-        {/* SCREEN SECTION (Flexible Height) */}
+        {/* SCREEN */}
         <div className="flex-1 px-4 min-h-0 flex flex-col z-10">
             <div className="bg-[#000] rounded-lg p-1 shadow-[inset_0_2px_10px_rgba(0,0,0,1)] border-b border-white/10 h-full flex flex-col">
                 <div className="bg-[#050805] rounded border border-[#222] relative overflow-hidden w-full h-full flex flex-col">
-                    {/* Screen Effects */}
                     <div className="absolute inset-0 z-20 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.1)_50%)] bg-[length:100%_4px] opacity-30"></div>
                     <div className="absolute inset-0 z-20 pointer-events-none bg-[radial-gradient(circle_at_center,transparent_50%,rgba(0,0,0,0.6)_100%)]"></div>
 
-                    {/* Info Header */}
                     <div className="shrink-0 flex justify-between px-3 py-2 text-[#33ff00] font-mono text-[9px] z-30 opacity-70 border-b border-[#33ff00]/20">
                         <span>{screen === 'training' ? `MODE: ${difficulty.toUpperCase()}` : 'MODE: LIBRARY'}</span>
                         <span>CLK: {bpm}</span>
                     </div>
 
-                    {/* CONTENT AREA (Flexible) */}
                     <div className="flex-1 relative z-10 p-2 md:p-4">
                         {screen === 'training' && (
                             <div className="w-full h-full grid grid-cols-2 grid-rows-2 md:grid-cols-4 md:grid-rows-1 gap-2">
                                 {cards.map((card, index) => (
-                                    <PhosphorCard key={card.uid || index} pattern={card} isNew={animateCards} index={index} />
+                                    <PhosphorCard 
+                                        key={card.uid || index} 
+                                        pattern={card} 
+                                        isNew={animateCards} 
+                                        index={index}
+                                        // Highlight current card if sequence playing
+                                        isPlayingSeq={isSequencePlaying && beatIndicator === index}
+                                    />
                                 ))}
                             </div>
                         )}
                         {screen === 'library' && (
-                            <div className="w-full h-full overflow-y-auto custom-scrollbar pb-8">
+                            <div className="w-full h-full overflow-y-auto custom-scrollbar pb-20"> {/* Fixed: Increased padding bottom */}
                                 <div className="grid grid-cols-3 gap-2">
                                     {Object.keys(PATTERNS).map((key) => (
                                         <PhosphorCard key={key} pattern={PATTERNS[key]} isActive={activeLibraryPattern === key} onClick={() => handlePatternClick(key)} minimal={true} />
@@ -398,28 +454,28 @@ export default function RhythmCardsApp() {
                         )}
                     </div>
 
-                    {/* Waveform (Fixed Height at Bottom) */}
                     <div className="h-12 shrink-0 relative z-0">
-                         <RetroWaveform isPlaying={isPlaying} beat={beatIndicator} activePattern={activeLibraryPattern} />
+                         <RetroWaveform isPlaying={isPlaying} beat={beatIndicator} activePattern={activeLibraryPattern} isSequencePlaying={isSequencePlaying} />
                     </div>
                 </div>
             </div>
         </div>
 
-        {/* CONTROLS SECTION (Fixed Height) */}
+        {/* CONTROLS */}
         <div className="shrink-0 bg-[#222] px-6 py-6 border-t border-black shadow-[inset_0_2px_4px_rgba(0,0,0,0.5)] z-20">
-            {/* Status Lights */}
             <div className="flex justify-between items-center mb-4">
                <div className="flex gap-1">
                  {[0, 1, 2, 3].map(i => (
                     <div key={i} className={`w-6 h-1.5 rounded-sm transition-all duration-75 border border-black/30 ${isPlaying && beatIndicator === i ? (i === 0 ? 'bg-red-500 shadow-[0_0_10px_#ef4444]' : 'bg-[#33ff00] shadow-[0_0_10px_#33ff00]') : 'bg-[#1a1a1a]'}`}></div>
                 ))}
                </div>
-               {/* Difficulty Toggle */}
+               
                {screen === 'training' && (
                 <div className="flex gap-1 bg-[#181818] p-1 rounded shadow-inner">
                     {['basic', 'advanced', 'expert'].map((lvl) => (
-                        <button key={lvl} onClick={() => setDifficulty(lvl)} className={`w-2 h-2 rounded-full transition-all ${difficulty === lvl ? 'bg-[#e06c28] shadow-[0_0_5px_#e06c28]' : 'bg-[#444]'}`} title={lvl}></button>
+                        <button key={lvl} onClick={() => setDifficulty(lvl)} className={`px-2 py-1 rounded text-[8px] md:text-[10px] font-bold uppercase transition-all ${difficulty === lvl ? 'bg-[#e06c28] text-white shadow-sm' : 'text-[#666] hover:text-[#999] hover:bg-[#252525]'}`}>
+                            {lvl === 'basic' ? 'BAS' : lvl === 'advanced' ? 'ADV' : 'EXP'}
+                        </button>
                     ))}
                 </div>
                )}
@@ -430,16 +486,36 @@ export default function RhythmCardsApp() {
                  <Fader label="Volume" value={volume} min={0} max={100} onChange={(e) => setVolume(parseInt(e.target.value))} onDecrement={() => setVolume(Math.max(0, volume - 5))} onIncrement={() => setVolume(Math.min(100, volume + 5))} unit="%" />
             </div>
 
-            <div className="grid grid-cols-2 gap-4 h-14">
-                 <TactileButton onClick={toggleMetronome} active={isPlaying} color={isPlaying ? "orange" : "grey"} className="w-full h-full text-lg">
-                    {isPlaying ? <Pause /> : <Play />}<span>{isPlaying ? "STOP" : "RUN"}</span>
-                 </TactileButton>
-                 {screen === 'training' ? (
-                     <TactileButton onClick={generateCards} active={!animateCards} color="orange" className="w-full h-full text-lg"><RefreshCw className={!animateCards ? 'animate-spin' : ''} /><span>SYNC</span></TactileButton>
-                 ) : (
-                     <TactileButton onClick={() => handlePatternClick(null)} active={false} color="grey" className="w-full h-full text-lg"><X /><span>MUTE</span></TactileButton>
-                 )}
-            </div>
+            {/* CONTROL BUTTONS: Grid adjusted for 3 buttons in Train mode */}
+            {screen === 'training' ? (
+                <div className="grid grid-cols-3 gap-2 h-14">
+                    {/* 1. Stop/Run */}
+                    <TactileButton onClick={toggleMetronome} active={isPlaying} color={isPlaying ? "orange" : "grey"} className="w-full h-full text-xs md:text-sm">
+                        {isPlaying ? <Pause size={18} /> : <Play size={18} />}<span>{isPlaying ? "STOP" : "RUN"}</span>
+                    </TactileButton>
+                    
+                    {/* 2. Play Sequence (NEW) */}
+                    <TactileButton onClick={toggleSequence} active={isSequencePlaying} color="grey" className="w-full h-full text-xs md:text-sm">
+                        <PlayCircle size={18} className={isSequencePlaying ? "text-[#33ff00]" : ""} />
+                        <span>SEQ</span>
+                    </TactileButton>
+
+                    {/* 3. Shuffle */}
+                    <TactileButton onClick={generateCards} active={!animateCards} color="orange" className="w-full h-full text-xs md:text-sm">
+                        <RefreshCw size={18} className={!animateCards ? 'animate-spin' : ''} />
+                        <span>SYNC</span>
+                    </TactileButton>
+                </div>
+            ) : (
+                <div className="grid grid-cols-2 gap-4 h-14">
+                    <TactileButton onClick={toggleMetronome} active={isPlaying} color={isPlaying ? "orange" : "grey"} className="w-full h-full text-lg">
+                        {isPlaying ? <Pause /> : <Play />}<span>{isPlaying ? "STOP" : "RUN"}</span>
+                    </TactileButton>
+                    <TactileButton onClick={() => handlePatternClick(null)} active={false} color="grey" className="w-full h-full text-lg">
+                        <X /><span>MUTE</span>
+                    </TactileButton>
+                </div>
+            )}
         </div>
 
       </div>
