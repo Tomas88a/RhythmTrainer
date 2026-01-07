@@ -2,13 +2,13 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, Pause, RefreshCw, Volume2, Power, Minus, Plus, Settings, BookOpen, X, PlayCircle } from 'lucide-react';
 
 /**
- * Rhythm Cards Trainer - Field Ops Edition v2.6
- * Updates:
- * 1. Added "PLAY SEQ" button in Train Mode: Plays the 4 displayed cards in sequence.
- * 2. Fixed Mobile Library Scrolling: Added extra padding to ensure bottom cards aren't obscured.
+ * Rhythm Cards Trainer - Field Ops Edition v2.7
+ * Fixes:
+ * 1. Mobile Train Mode: Increased card padding to shrink SVG size and prevent border clipping.
+ * 2. Mobile Lib Mode: Significantly increased bottom padding (pb-32) to ensure the last row is fully visible when scrolled.
  */
 
-// --- Audio Engine ---
+// --- Audio Engine (Unchanged) ---
 class MetronomeEngine {
   constructor() {
     this.ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -22,8 +22,8 @@ class MetronomeEngine {
     this.beatCount = 0; 
     this.visualQueue = [];
     
-    this.activePatternTimings = null; // Single pattern repeating (Lib mode)
-    this.activeSequence = null;       // Array of 4 patterns (Train mode)
+    this.activePatternTimings = null;
+    this.activeSequence = null;
   }
 
   nextNote() {
@@ -69,12 +69,8 @@ class MetronomeEngine {
   scheduler() {
     while (this.nextNoteTime < this.ctx.currentTime + this.scheduleAheadTime) {
       const secondsPerBeat = 60.0 / this.tempo;
-
-      // 1. Metronome Tick
       this.scheduleMetronomeClick(this.nextNoteTime);
       
-      // 2. Pattern Playback
-      // Priority A: Sequence (Train Mode) - Play specific pattern for current beat
       if (this.activeSequence && this.activeSequence.length === 4) {
           const currentPatternTimings = this.activeSequence[this.beatCount];
           if (currentPatternTimings) {
@@ -84,7 +80,6 @@ class MetronomeEngine {
               });
           }
       } 
-      // Priority B: Single Pattern (Library Mode) - Repeat same pattern every beat
       else if (this.activePatternTimings && this.activePatternTimings.length > 0) {
           this.activePatternTimings.forEach(offset => {
               const noteTime = this.nextNoteTime + (offset * secondsPerBeat);
@@ -121,11 +116,11 @@ class MetronomeEngine {
   setVolume(vol) { this.volume = vol; }
   setActivePattern(timings) { 
       this.activePatternTimings = timings; 
-      this.activeSequence = null; // Clear sequence if pattern is set
+      this.activeSequence = null; 
   }
   setActiveSequence(sequence) {
       this.activeSequence = sequence;
-      this.activePatternTimings = null; // Clear pattern if sequence is set
+      this.activePatternTimings = null; 
   }
 }
 
@@ -143,9 +138,7 @@ const RetroWaveform = ({ isPlaying, beat, activePattern, isSequencePlaying }) =>
             let y = 50; 
             let noise = (Math.random() - 0.5) * 3;
             if (isPlaying) {
-                // Visualize excitement if ANY pattern is playing
                 const excitement = (activePattern || isSequencePlaying) ? 2 : 1; 
-                
                 const sectionSize = totalPoints / 4;
                 const activeStart = beat * sectionSize;
                 const activeEnd = (beat + 1) * sectionSize;
@@ -199,7 +192,7 @@ const PhosphorCard = ({ pattern, isNew, index, onClick, isActive, minimal = fals
     relative overflow-hidden bg-[#0d120d] border rounded cursor-pointer select-none
     transition-all duration-200 w-full h-full
     ${isActive || isPlayingSeq
-        ? 'border-[#33ff00] bg-[#1a2e1a] shadow-[0_0_15px_rgba(51,255,0,0.4)] z-10' 
+        ? 'border-[#33ff00] bg-[#1a2e1a] shadow-[0_0_15px_rgba(51,255,0,0.4)] z-10 scale-105' 
         : 'border-[#33ff00]/20 hover:border-[#33ff00]/60 hover:bg-[#33ff00]/10 opacity-80'}
     ${!isActive && !isPlayingSeq && !minimal && !isNew ? 'opacity-40 grayscale' : ''}
     ${isPlayingSeq ? 'scale-105' : ''}
@@ -207,7 +200,8 @@ const PhosphorCard = ({ pattern, isNew, index, onClick, isActive, minimal = fals
     <div className="absolute inset-0 opacity-10 pointer-events-none" 
         style={{ backgroundImage: 'linear-gradient(rgba(0,0,0,0) 50%, rgba(0,0,0,0.5) 50%)', backgroundSize: '100% 4px' }}></div>
     
-    <div className={`flex-1 flex items-center justify-center text-[#33ff00] w-full min-h-0 ${minimal ? 'p-1' : 'p-1 md:p-2'}`}
+    {/* SVG Container: Increased Padding here (p-3) to shrink SVG */}
+    <div className={`flex-1 flex items-center justify-center text-[#33ff00] w-full min-h-0 ${minimal ? 'p-2' : 'p-3 md:p-4'}`}
            style={{ filter: (isActive || isPlayingSeq) ? 'drop-shadow(0 0 4px rgba(51, 255, 0, 0.8))' : 'none' }}>
         <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible" preserveAspectRatio="xMidYMid meet">
           {pattern.render()}
@@ -350,17 +344,14 @@ export default function RhythmCardsApp() {
     setBpm(newBpm);
   };
 
-  // --- Train Mode: Play Sequence Logic ---
   const toggleSequence = async () => {
       if (isSequencePlaying) {
           setIsSequencePlaying(false);
           metronomeRef.current.setActiveSequence(null);
       } else {
-          // Extract pattern timings from the 4 displayed cards
           const sequenceTimings = cards.map(card => card.timings);
           metronomeRef.current.setActiveSequence(sequenceTimings);
           setIsSequencePlaying(true);
-          // Ensure metronome is running
           if (!isPlaying) {
               metronomeRef.current.setTempo(bpm);
               await metronomeRef.current.start();
@@ -399,6 +390,8 @@ export default function RhythmCardsApp() {
         <div className="absolute inset-0 opacity-5 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]"></div>
         <div className="absolute top-3 left-3"><Screw /></div>
         <div className="absolute top-3 right-3"><Screw /></div>
+        <div className="absolute bottom-3 left-3"><Screw /></div>
+        <div className="absolute bottom-3 right-3"><Screw /></div>
         
         {/* HEADER */}
         <div className="shrink-0 px-6 pt-8 pb-4 flex justify-between items-end z-10">
@@ -430,21 +423,20 @@ export default function RhythmCardsApp() {
 
                     <div className="flex-1 relative z-10 p-2 md:p-4">
                         {screen === 'training' && (
-                            <div className="w-full h-full grid grid-cols-2 grid-rows-2 md:grid-cols-4 md:grid-rows-1 gap-2">
+                            <div className="w-full h-full grid grid-cols-2 grid-rows-2 md:grid-cols-4 md:grid-rows-1 gap-2 md:gap-4">
                                 {cards.map((card, index) => (
                                     <PhosphorCard 
                                         key={card.uid || index} 
                                         pattern={card} 
                                         isNew={animateCards} 
                                         index={index}
-                                        // Highlight current card if sequence playing
                                         isPlayingSeq={isSequencePlaying && beatIndicator === index}
                                     />
                                 ))}
                             </div>
                         )}
                         {screen === 'library' && (
-                            <div className="w-full h-full overflow-y-auto custom-scrollbar pb-20"> {/* Fixed: Increased padding bottom */}
+                            <div className="w-full h-full overflow-y-auto custom-scrollbar pb-32"> {/* Increased padding bottom significantly */}
                                 <div className="grid grid-cols-3 gap-2">
                                     {Object.keys(PATTERNS).map((key) => (
                                         <PhosphorCard key={key} pattern={PATTERNS[key]} isActive={activeLibraryPattern === key} onClick={() => handlePatternClick(key)} minimal={true} />
