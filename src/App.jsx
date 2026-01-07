@@ -2,14 +2,14 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, Pause, RefreshCw, Volume2, Power, Minus, Plus, Settings, BookOpen, X } from 'lucide-react';
 
 /**
- * Rhythm Cards Trainer - Field Ops Edition v2.3
+ * Rhythm Cards Trainer - Field Ops Edition v2.4 (Mobile Fit)
  * Fixes:
- * - Mobile aspect ratio changed to 3:4 (vertical) to prevent squashing cards.
- * - Desktop aspect ratio remains 4:3 (horizontal).
- * - Optimized card padding for small screens.
+ * - Removed fixed aspect ratios.
+ * - Used Flexbox to force app to fit exactly within the viewport (no scrolling).
+ * - Cards now auto-resize to fit the available screen area.
  */
 
-// --- Audio Engine ---
+// --- Audio Engine (Unchanged) ---
 class MetronomeEngine {
   constructor() {
     this.ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -22,7 +22,6 @@ class MetronomeEngine {
     this.volume = 0.5; 
     this.beatCount = 0; 
     this.visualQueue = [];
-    
     this.activePatternTimings = null;
   }
 
@@ -35,23 +34,18 @@ class MetronomeEngine {
   scheduleMetronomeClick(time) {
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
-
     osc.type = 'square'; 
     if (this.beatCount === 0) {
         osc.frequency.value = 1200; 
     } else {
         osc.frequency.value = 800;  
     }
-    
     const vol = Math.max(0.001, this.volume * 0.6);
-
     gain.gain.setValueAtTime(0, time);
     gain.gain.linearRampToValueAtTime(vol, time + 0.005); 
     gain.gain.exponentialRampToValueAtTime(0.001, time + 0.05); 
-
     osc.connect(gain);
     gain.connect(this.ctx.destination);
-
     osc.start(time);
     osc.stop(time + 0.05);
   }
@@ -59,19 +53,14 @@ class MetronomeEngine {
   schedulePatternSound(time) {
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
-
     osc.type = 'triangle'; 
     osc.frequency.value = 600; 
-    
     const vol = Math.max(0.001, this.volume);
-
     gain.gain.setValueAtTime(0, time);
     gain.gain.linearRampToValueAtTime(vol, time + 0.005); 
     gain.gain.exponentialRampToValueAtTime(0.001, time + 0.1); 
-
     osc.connect(gain);
     gain.connect(this.ctx.destination);
-
     osc.start(time);
     osc.stop(time + 0.1);
   }
@@ -79,21 +68,14 @@ class MetronomeEngine {
   scheduler() {
     while (this.nextNoteTime < this.ctx.currentTime + this.scheduleAheadTime) {
       const secondsPerBeat = 60.0 / this.tempo;
-
       this.scheduleMetronomeClick(this.nextNoteTime);
-      
       if (this.activePatternTimings && this.activePatternTimings.length > 0) {
           this.activePatternTimings.forEach(offset => {
               const noteTime = this.nextNoteTime + (offset * secondsPerBeat);
               this.schedulePatternSound(noteTime);
           });
       }
-
-      this.visualQueue.push({ 
-          noteTime: this.nextNoteTime, 
-          beat: this.beatCount 
-      });
-
+      this.visualQueue.push({ noteTime: this.nextNoteTime, beat: this.beatCount });
       this.nextNote();
     }
     this.timerID = window.setTimeout(this.scheduler.bind(this), this.lookahead);
@@ -118,24 +100,15 @@ class MetronomeEngine {
     }
   }
 
-  setTempo(bpm) {
-    this.tempo = bpm;
-  }
-
-  setVolume(vol) {
-    this.volume = vol;
-  }
-
-  setActivePattern(timings) {
-      this.activePatternTimings = timings;
-  }
+  setTempo(bpm) { this.tempo = bpm; }
+  setVolume(vol) { this.volume = vol; }
+  setActivePattern(timings) { this.activePatternTimings = timings; }
 }
 
 // --- Visual Components ---
 
 const RetroWaveform = ({ isPlaying, beat, activePattern }) => {
   const [points, setPoints] = useState('');
-
   useEffect(() => {
     let animationFrameId;
     const renderWave = () => {
@@ -145,13 +118,11 @@ const RetroWaveform = ({ isPlaying, beat, activePattern }) => {
             const x = (i / totalPoints) * 100;
             let y = 50; 
             let noise = (Math.random() - 0.5) * 3;
-            
             if (isPlaying) {
                 const excitement = activePattern ? 2 : 1; 
                 const sectionSize = totalPoints / 4;
                 const activeStart = beat * sectionSize;
                 const activeEnd = (beat + 1) * sectionSize;
-                
                 if (i >= activeStart && i <= activeEnd) {
                     const center = activeStart + (sectionSize / 2);
                     const distance = Math.abs(i - center);
@@ -175,164 +146,23 @@ const RetroWaveform = ({ isPlaying, beat, activePattern }) => {
   return (
     <div className="absolute bottom-0 left-0 w-full h-12 pointer-events-none z-0 overflow-hidden rounded-b-lg">
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full opacity-60">
-            <polyline 
-                points={points} 
-                fill="none" 
-                stroke="#33ff00" 
-                strokeWidth="0.5" 
-                vectorEffect="non-scaling-stroke"
-                className="drop-shadow-[0_0_4px_rgba(51,255,0,0.8)]"
-            />
+            <polyline points={points} fill="none" stroke="#33ff00" strokeWidth="0.5" vectorEffect="non-scaling-stroke" className="drop-shadow-[0_0_4px_rgba(51,255,0,0.8)]" />
         </svg>
     </div>
   );
 };
 
-// --- Rhythm Patterns Data ---
+// --- Patterns (Unchanged) ---
 const PATTERNS = {
-  quarter: {
-    id: 'quarter',
-    name: 'Quarter',
-    timings: [0], 
-    render: () => (
-      <g stroke="currentColor" fill="currentColor" strokeWidth="3">
-        <ellipse cx="50" cy="70" rx="10" ry="8" transform="rotate(-15 50 70)" />
-        <line x1="60" y1="70" x2="60" y2="20" strokeWidth="4" />
-      </g>
-    )
-  },
-  eighthPair: {
-    id: 'eighthPair',
-    name: 'Eighths',
-    timings: [0, 0.5],
-    render: () => (
-      <g stroke="currentColor" fill="currentColor" strokeWidth="4">
-        <ellipse cx="30" cy="70" rx="10" ry="8" transform="rotate(-15 30 70)" />
-        <line x1="40" y1="70" x2="40" y2="20" />
-        <ellipse cx="70" cy="70" rx="10" ry="8" transform="rotate(-15 70 70)" />
-        <line x1="80" y1="70" x2="80" y2="20" />
-        <line x1="40" y1="20" x2="80" y2="20" strokeWidth="8" />
-      </g>
-    )
-  },
-  sixteenthQuad: {
-    id: 'sixteenthQuad',
-    name: '16ths',
-    timings: [0, 0.25, 0.5, 0.75],
-    render: () => (
-      <g stroke="currentColor" fill="currentColor" strokeWidth="3">
-        {[20, 40, 60, 80].map(x => (
-          <React.Fragment key={x}>
-            <ellipse cx={x} cy="70" rx="8" ry="6" transform={`rotate(-15 ${x} 70)`} />
-            <line x1={x + 8} y1="70" x2={x + 8} y2="20" strokeWidth="3"/>
-          </React.Fragment>
-        ))}
-        <line x1="28" y1="20" x2="88" y2="20" strokeWidth="6" />
-        <line x1="28" y1="34" x2="88" y2="34" strokeWidth="6" />
-      </g>
-    )
-  },
-  front8Back16: {
-    id: 'front8Back16',
-    name: 'Galop',
-    timings: [0, 0.5, 0.75],
-    render: () => (
-      <g stroke="currentColor" fill="currentColor" strokeWidth="3">
-        <ellipse cx="30" cy="70" rx="9" ry="7" transform="rotate(-15 30 70)" />
-        <line x1="39" y1="70" x2="39" y2="20" strokeWidth="3"/>
-        <ellipse cx="60" cy="70" rx="9" ry="7" transform="rotate(-15 60 70)" />
-        <line x1="69" y1="70" x2="69" y2="20" strokeWidth="3"/>
-        <ellipse cx="80" cy="70" rx="9" ry="7" transform="rotate(-15 80 70)" />
-        <line x1="89" y1="70" x2="89" y2="20" strokeWidth="3"/>
-        <line x1="39" y1="20" x2="89" y2="20" strokeWidth="7" />
-        <line x1="69" y1="32" x2="89" y2="32" strokeWidth="6" />
-      </g>
-    )
-  },
-  front16Back8: {
-    id: 'front16Back8',
-    name: 'Rev.Galop',
-    timings: [0, 0.25, 0.5],
-    render: () => (
-      <g stroke="currentColor" fill="currentColor" strokeWidth="3">
-        <ellipse cx="20" cy="70" rx="9" ry="7" transform="rotate(-15 20 70)" />
-        <line x1="29" y1="70" x2="29" y2="20" strokeWidth="3"/>
-        <ellipse cx="40" cy="70" rx="9" ry="7" transform="rotate(-15 40 70)" />
-        <line x1="49" y1="70" x2="49" y2="20" strokeWidth="3"/>
-        <ellipse cx="70" cy="70" rx="9" ry="7" transform="rotate(-15 70 70)" />
-        <line x1="79" y1="70" x2="79" y2="20" strokeWidth="3"/>
-        <line x1="29" y1="20" x2="79" y2="20" strokeWidth="7" />
-        <line x1="29" y1="32" x2="49" y2="32" strokeWidth="6" />
-      </g>
-    )
-  },
-  triplet: {
-    id: 'triplet',
-    name: 'Triplet',
-    timings: [0, 1/3, 2/3],
-    render: () => (
-      <g stroke="currentColor" fill="currentColor" strokeWidth="3">
-        <ellipse cx="25" cy="70" rx="9" ry="7" transform="rotate(-15 25 70)" />
-        <line x1="34" y1="70" x2="34" y2="20" strokeWidth="3"/>
-        <ellipse cx="50" cy="70" rx="9" ry="7" transform="rotate(-15 50 70)" />
-        <line x1="59" y1="70" x2="59" y2="20" strokeWidth="3"/>
-        <ellipse cx="75" cy="70" rx="9" ry="7" transform="rotate(-15 75 70)" />
-        <line x1="84" y1="70" x2="84" y2="20" strokeWidth="3"/>
-        <line x1="34" y1="20" x2="84" y2="20" strokeWidth="7" />
-        <text x="59" y="15" textAnchor="middle" fontSize="18" fontWeight="bold" fill="currentColor">3</text>
-      </g>
-    )
-  },
-  dotted8Sixteenth: {
-    id: 'dotted8Sixteenth',
-    name: 'Dot-16',
-    timings: [0, 0.75],
-    render: () => (
-      <g stroke="currentColor" fill="currentColor" strokeWidth="3">
-        <ellipse cx="30" cy="70" rx="10" ry="8" transform="rotate(-15 30 70)" />
-        <line x1="40" y1="70" x2="40" y2="20" strokeWidth="3"/>
-        <circle cx="50" cy="65" r="5" />
-        <ellipse cx="70" cy="70" rx="10" ry="8" transform="rotate(-15 70 70)" />
-        <line x1="80" y1="70" x2="80" y2="20" strokeWidth="3"/>
-        <line x1="40" y1="20" x2="80" y2="20" strokeWidth="7" />
-        <line x1="70" y1="32" x2="80" y2="32" strokeWidth="6" />
-      </g>
-    )
-  },
-  sixteenthDotted8: {
-    id: 'sixteenthDotted8',
-    name: '16-Dot',
-    timings: [0, 0.25],
-    render: () => (
-      <g stroke="currentColor" fill="currentColor" strokeWidth="3">
-        <ellipse cx="30" cy="70" rx="10" ry="8" transform="rotate(-15 30 70)" />
-        <line x1="40" y1="70" x2="40" y2="20" strokeWidth="3"/>
-        <ellipse cx="70" cy="70" rx="10" ry="8" transform="rotate(-15 70 70)" />
-        <line x1="80" y1="70" x2="80" y2="20" strokeWidth="3"/>
-        <circle cx="90" cy="65" r="5" />
-        <line x1="40" y1="20" x2="80" y2="20" strokeWidth="7" />
-        <line x1="40" y1="32" x2="55" y2="32" strokeWidth="6" />
-      </g>
-    )
-  },
-  syncopation16: {
-    id: 'syncopation16',
-    name: 'Sync',
-    timings: [0, 0.25, 0.75],
-    render: () => (
-      <g stroke="currentColor" fill="currentColor" strokeWidth="3">
-        <ellipse cx="20" cy="70" rx="8" ry="6" transform="rotate(-15 20 70)" />
-        <line x1="28" y1="70" x2="28" y2="20" strokeWidth="3"/>
-        <ellipse cx="50" cy="70" rx="8" ry="6" transform="rotate(-15 50 70)" />
-        <line x1="58" y1="70" x2="58" y2="20" strokeWidth="3"/>
-        <ellipse cx="80" cy="70" rx="8" ry="6" transform="rotate(-15 80 70)" />
-        <line x1="88" y1="70" x2="88" y2="20" strokeWidth="3"/>
-        <line x1="28" y1="20" x2="88" y2="20" strokeWidth="7" />
-        <line x1="28" y1="32" x2="38" y2="32" strokeWidth="6" />
-        <line x1="78" y1="32" x2="88" y2="32" strokeWidth="6" />
-      </g>
-    )
-  }
+  quarter: { id: 'quarter', name: 'Quarter', timings: [0], render: () => (<g stroke="currentColor" fill="currentColor" strokeWidth="3"><ellipse cx="50" cy="70" rx="10" ry="8" transform="rotate(-15 50 70)" /><line x1="60" y1="70" x2="60" y2="20" strokeWidth="4" /></g>) },
+  eighthPair: { id: 'eighthPair', name: 'Eighths', timings: [0, 0.5], render: () => (<g stroke="currentColor" fill="currentColor" strokeWidth="4"><ellipse cx="30" cy="70" rx="10" ry="8" transform="rotate(-15 30 70)" /><line x1="40" y1="70" x2="40" y2="20" /><ellipse cx="70" cy="70" rx="10" ry="8" transform="rotate(-15 70 70)" /><line x1="80" y1="70" x2="80" y2="20" /><line x1="40" y1="20" x2="80" y2="20" strokeWidth="8" /></g>) },
+  sixteenthQuad: { id: 'sixteenthQuad', name: '16ths', timings: [0, 0.25, 0.5, 0.75], render: () => (<g stroke="currentColor" fill="currentColor" strokeWidth="3">{[20, 40, 60, 80].map(x => (<React.Fragment key={x}><ellipse cx={x} cy="70" rx="8" ry="6" transform={`rotate(-15 ${x} 70)`} /><line x1={x + 8} y1="70" x2={x + 8} y2="20" strokeWidth="3"/></React.Fragment>))}<line x1="28" y1="20" x2="88" y2="20" strokeWidth="6" /><line x1="28" y1="34" x2="88" y2="34" strokeWidth="6" /></g>) },
+  front8Back16: { id: 'front8Back16', name: 'Galop', timings: [0, 0.5, 0.75], render: () => (<g stroke="currentColor" fill="currentColor" strokeWidth="3"><ellipse cx="30" cy="70" rx="9" ry="7" transform="rotate(-15 30 70)" /><line x1="39" y1="70" x2="39" y2="20" strokeWidth="3"/><ellipse cx="60" cy="70" rx="9" ry="7" transform="rotate(-15 60 70)" /><line x1="69" y1="70" x2="69" y2="20" strokeWidth="3"/><ellipse cx="80" cy="70" rx="9" ry="7" transform="rotate(-15 80 70)" /><line x1="89" y1="70" x2="89" y2="20" strokeWidth="3"/><line x1="39" y1="20" x2="89" y2="20" strokeWidth="7" /><line x1="69" y1="32" x2="89" y2="32" strokeWidth="6" /></g>) },
+  front16Back8: { id: 'front16Back8', name: 'Rev.Galop', timings: [0, 0.25, 0.5], render: () => (<g stroke="currentColor" fill="currentColor" strokeWidth="3"><ellipse cx="20" cy="70" rx="9" ry="7" transform="rotate(-15 20 70)" /><line x1="29" y1="70" x2="29" y2="20" strokeWidth="3"/><ellipse cx="40" cy="70" rx="9" ry="7" transform="rotate(-15 40 70)" /><line x1="49" y1="70" x2="49" y2="20" strokeWidth="3"/><ellipse cx="70" cy="70" rx="9" ry="7" transform="rotate(-15 70 70)" /><line x1="79" y1="70" x2="79" y2="20" strokeWidth="3"/><line x1="29" y1="20" x2="79" y2="20" strokeWidth="7" /><line x1="29" y1="32" x2="49" y2="32" strokeWidth="6" /></g>) },
+  triplet: { id: 'triplet', name: 'Triplet', timings: [0, 1/3, 2/3], render: () => (<g stroke="currentColor" fill="currentColor" strokeWidth="3"><ellipse cx="25" cy="70" rx="9" ry="7" transform="rotate(-15 25 70)" /><line x1="34" y1="70" x2="34" y2="20" strokeWidth="3"/><ellipse cx="50" cy="70" rx="9" ry="7" transform="rotate(-15 50 70)" /><line x1="59" y1="70" x2="59" y2="20" strokeWidth="3"/><ellipse cx="75" cy="70" rx="9" ry="7" transform="rotate(-15 75 70)" /><line x1="84" y1="70" x2="84" y2="20" strokeWidth="3"/><line x1="34" y1="20" x2="84" y2="20" strokeWidth="7" /><text x="59" y="15" textAnchor="middle" fontSize="18" fontWeight="bold" fill="currentColor">3</text></g>) },
+  dotted8Sixteenth: { id: 'dotted8Sixteenth', name: 'Dot-16', timings: [0, 0.75], render: () => (<g stroke="currentColor" fill="currentColor" strokeWidth="3"><ellipse cx="30" cy="70" rx="10" ry="8" transform="rotate(-15 30 70)" /><line x1="40" y1="70" x2="40" y2="20" strokeWidth="3"/><circle cx="50" cy="65" r="5" /><ellipse cx="70" cy="70" rx="10" ry="8" transform="rotate(-15 70 70)" /><line x1="80" y1="70" x2="80" y2="20" strokeWidth="3"/><line x1="40" y1="20" x2="80" y2="20" strokeWidth="7" /><line x1="70" y1="32" x2="80" y2="32" strokeWidth="6" /></g>) },
+  sixteenthDotted8: { id: 'sixteenthDotted8', name: '16-Dot', timings: [0, 0.25], render: () => (<g stroke="currentColor" fill="currentColor" strokeWidth="3"><ellipse cx="30" cy="70" rx="10" ry="8" transform="rotate(-15 30 70)" /><line x1="40" y1="70" x2="40" y2="20" strokeWidth="3"/><ellipse cx="70" cy="70" rx="10" ry="8" transform="rotate(-15 70 70)" /><line x1="80" y1="70" x2="80" y2="20" strokeWidth="3"/><circle cx="90" cy="65" r="5" /><line x1="40" y1="20" x2="80" y2="20" strokeWidth="7" /><line x1="40" y1="32" x2="55" y2="32" strokeWidth="6" /></g>) },
+  syncopation16: { id: 'syncopation16', name: 'Sync', timings: [0, 0.25, 0.75], render: () => (<g stroke="currentColor" fill="currentColor" strokeWidth="3"><ellipse cx="20" cy="70" rx="8" ry="6" transform="rotate(-15 20 70)" /><line x1="28" y1="70" x2="28" y2="20" strokeWidth="3"/><ellipse cx="50" cy="70" rx="8" ry="6" transform="rotate(-15 50 70)" /><line x1="58" y1="70" x2="58" y2="20" strokeWidth="3"/><ellipse cx="80" cy="70" rx="8" ry="6" transform="rotate(-15 80 70)" /><line x1="88" y1="70" x2="88" y2="20" strokeWidth="3"/><line x1="28" y1="20" x2="88" y2="20" strokeWidth="7" /><line x1="28" y1="32" x2="38" y2="32" strokeWidth="6" /><line x1="78" y1="32" x2="88" y2="32" strokeWidth="6" /></g>) }
 };
 
 const PhosphorCard = ({ pattern, isNew, index, onClick, isActive, minimal = false }) => (
@@ -368,7 +198,6 @@ const PhosphorCard = ({ pattern, isNew, index, onClick, isActive, minimal = fals
 );
 
 // --- Styled Components ---
-
 const TactileButton = ({ onClick, children, className, active, color = 'grey' }) => (
   <button 
     onClick={onClick}
@@ -398,55 +227,26 @@ const Screw = () => (
 );
 
 const Fader = ({ label, value, min, max, onChange, onIncrement, onDecrement, unit = '' }) => (
-  <div className="flex flex-col gap-1 w-full bg-[#1a1a1a] p-3 rounded-lg border border-white/5 shadow-inner">
+  <div className="flex flex-col gap-1 w-full bg-[#1a1a1a] p-2 md:p-3 rounded-lg border border-white/5 shadow-inner h-full justify-center">
     <div className="flex justify-between items-end mb-1">
       <label className="text-[10px] font-bold text-[#888] uppercase tracking-widest">{label}</label>
       <span className="font-mono text-xs font-bold text-[#e06c28]">{value}{unit}</span>
     </div>
-    
-    <div className="flex items-center gap-3">
-      <button onClick={onDecrement} className="w-8 h-8 rounded bg-[#333] text-gray-400 flex items-center justify-center hover:bg-[#444] active:bg-[#222] shadow transition-colors">
-        <Minus size={14} />
-      </button>
-      
-      <div className="relative flex-1 h-10 flex items-center">
+    <div className="flex items-center gap-2">
+      <button onClick={onDecrement} className="w-8 h-8 rounded bg-[#333] text-gray-400 flex items-center justify-center hover:bg-[#444] active:bg-[#222] shadow transition-colors"><Minus size={14} /></button>
+      <div className="relative flex-1 h-8 flex items-center">
         <div className="absolute w-full h-2 bg-[#000] rounded-full shadow-[inset_0_1px_3px_rgba(0,0,0,1)] border-b border-white/10"></div>
-        <div className="absolute w-full h-full flex justify-between px-1 pointer-events-none">
-          {[...Array(11)].map((_, i) => (
-            <div key={i} className="w-[1px] h-2 bg-[#444] self-center mt-4"></div>
-          ))}
-        </div>
-
-        <input 
-          type="range" 
-          min={min} 
-          max={max} 
-          value={value} 
-          onChange={onChange}
-          className="w-full appearance-none bg-transparent relative z-10 cursor-pointer h-full opacity-0" 
-        />
-        
-        <div 
-          className="absolute h-6 w-10 bg-gradient-to-b from-[#555] to-[#333] rounded shadow-[0_4px_6px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.2)] flex justify-center items-center pointer-events-none border border-black"
-          style={{ 
-            left: `calc(${((value - min) / (max - min)) * 100}% - 20px)` 
-          }}
-        >
-          <div className="w-1 h-3 bg-[#e06c28] rounded-full shadow-[0_0_5px_rgba(224,108,40,0.5)]"></div>
-          <div className="absolute left-1 h-3 w-[1px] bg-black/30"></div>
-          <div className="absolute right-1 h-3 w-[1px] bg-black/30"></div>
-        </div>
+        <input type="range" min={min} max={max} value={value} onChange={onChange} className="w-full appearance-none bg-transparent relative z-10 cursor-pointer h-full opacity-0" />
+        <div className="absolute h-6 w-8 bg-gradient-to-b from-[#555] to-[#333] rounded shadow-[0_4px_6px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.2)] flex justify-center items-center pointer-events-none border border-black" style={{ left: `calc(${((value - min) / (max - min)) * 100}% - 16px)` }}><div className="w-1 h-3 bg-[#e06c28] rounded-full shadow-[0_0_5px_rgba(224,108,40,0.5)]"></div></div>
       </div>
-
-      <button onClick={onIncrement} className="w-8 h-8 rounded bg-[#333] text-gray-400 flex items-center justify-center hover:bg-[#444] active:bg-[#222] shadow transition-colors">
-        <Plus size={14} />
-      </button>
+      <button onClick={onIncrement} className="w-8 h-8 rounded bg-[#333] text-gray-400 flex items-center justify-center hover:bg-[#444] active:bg-[#222] shadow transition-colors"><Plus size={14} /></button>
     </div>
   </div>
 );
 
+// --- Main App ---
 export default function RhythmCardsApp() {
-  const [screen, setScreen] = useState('training'); // 'training' | 'library'
+  const [screen, setScreen] = useState('training'); 
   const [difficulty, setDifficulty] = useState('basic');
   const [cards, setCards] = useState([]);
   const [bpm, setBpm] = useState(60);
@@ -459,25 +259,17 @@ export default function RhythmCardsApp() {
   const metronomeRef = useRef(null);
 
   useEffect(() => {
-    if (!metronomeRef.current) {
-        metronomeRef.current = new MetronomeEngine();
-    }
+    if (!metronomeRef.current) metronomeRef.current = new MetronomeEngine();
   }, []);
-
-  const getPool = (diff) => {
-    const basic = ['quarter', 'eighthPair', 'sixteenthQuad'];
-    const advanced = [...basic, 'front8Back16', 'front16Back8', 'triplet'];
-    const expert = [...advanced, 'dotted8Sixteenth', 'sixteenthDotted8', 'syncopation16'];
-    
-    if (diff === 'basic') return basic;
-    if (diff === 'advanced') return advanced;
-    return expert;
-  };
 
   const generateCards = useCallback(() => {
     setAnimateCards(false);
     setTimeout(() => {
-      const pool = getPool(difficulty);
+      const basic = ['quarter', 'eighthPair', 'sixteenthQuad'];
+      const advanced = [...basic, 'front8Back16', 'front16Back8', 'triplet'];
+      const expert = [...advanced, 'dotted8Sixteenth', 'sixteenthDotted8', 'syncopation16'];
+      const pool = difficulty === 'basic' ? basic : difficulty === 'advanced' ? advanced : expert;
+      
       const newCards = Array(4).fill(null).map(() => {
         const randomKey = pool[Math.floor(Math.random() * pool.length)];
         return { ...PATTERNS[randomKey], uid: Math.random() };
@@ -487,11 +279,8 @@ export default function RhythmCardsApp() {
     }, 100);
   }, [difficulty]);
 
-  useEffect(() => {
-    generateCards();
-  }, [generateCards]);
+  useEffect(() => { generateCards(); }, [generateCards]);
 
-  // Visual Sync Loop
   useEffect(() => {
     let animationFrameId;
     const tick = () => {
@@ -509,13 +298,8 @@ export default function RhythmCardsApp() {
     return () => cancelAnimationFrame(animationFrameId);
   }, []);
 
-  useEffect(() => {
-    if (metronomeRef.current) metronomeRef.current.setVolume(volume / 100);
-  }, [volume]);
-
-  useEffect(() => {
-    if (metronomeRef.current) metronomeRef.current.setTempo(bpm);
-  }, [bpm]);
+  useEffect(() => { if (metronomeRef.current) metronomeRef.current.setVolume(volume / 100); }, [volume]);
+  useEffect(() => { if (metronomeRef.current) metronomeRef.current.setTempo(bpm); }, [bpm]);
 
   const toggleMetronome = async () => {
     if (isPlaying) {
@@ -534,22 +318,17 @@ export default function RhythmCardsApp() {
     setBpm(newBpm);
   };
 
-  // --- Library Mode Logic ---
   const handlePatternClick = (patternKey) => {
       if (activeLibraryPattern === patternKey) {
-          // Toggle off
           setActiveLibraryPattern(null);
           metronomeRef.current.setActivePattern(null);
       } else {
-          // Toggle on
           setActiveLibraryPattern(patternKey);
           metronomeRef.current.setActivePattern(PATTERNS[patternKey].timings);
-          // Auto start metronome if not playing
           if (!isPlaying) toggleMetronome();
       }
   };
 
-  // Reset pattern when switching screens
   const switchScreen = (newScreen) => {
       setScreen(newScreen);
       setActiveLibraryPattern(null);
@@ -557,201 +336,117 @@ export default function RhythmCardsApp() {
   };
 
   return (
-    <div className="min-h-screen bg-[#111] flex items-center justify-center p-4 select-none font-sans overflow-hidden">
-      
-      <div className="fixed inset-0 opacity-10 pointer-events-none" 
-           style={{ backgroundImage: 'radial-gradient(#555 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
+    <div className="fixed inset-0 bg-[#111] flex items-center justify-center overflow-hidden font-sans select-none">
+      <div className="fixed inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#555 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
 
-      <div className="relative w-full max-w-lg bg-[#2e302e] rounded-[1.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.9),inset_0_1px_1px_rgba(255,255,255,0.1)] border-t border-white/5 border-b-4 border-black/40 overflow-hidden">
+      {/* Main Device Case: Fits within viewport using Flexbox */}
+      <div className="relative w-full h-full md:w-auto md:h-auto md:max-h-[90vh] md:aspect-[3/5] md:max-w-md bg-[#2e302e] md:rounded-[2rem] shadow-2xl overflow-hidden flex flex-col border-t border-white/5 md:border-b-4 border-black/40">
         
+        {/* Texture & Screws (Absolute) */}
         <div className="absolute inset-0 opacity-5 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]"></div>
         <div className="absolute top-3 left-3"><Screw /></div>
         <div className="absolute top-3 right-3"><Screw /></div>
-        <div className="absolute bottom-3 left-3"><Screw /></div>
-        <div className="absolute bottom-3 right-3"><Screw /></div>
-
-        {/* --- DEVICE HEADER --- */}
-        <div className="px-8 pt-8 pb-4 flex justify-between items-end">
+        
+        {/* HEADER SECTION (Fixed Height) */}
+        <div className="shrink-0 px-6 pt-8 pb-4 flex justify-between items-end z-10">
             <div className="flex flex-col">
-                <div className="text-[9px] font-bold text-[#666] uppercase tracking-[0.3em] mb-1">
-                    Made by Tmx
-                </div>
+                <div className="text-[9px] font-bold text-[#666] uppercase tracking-[0.3em] mb-1">Made by Tmx</div>
                 <div className="flex items-center gap-2">
                     <Settings className="text-[#888]" size={18} />
                     <span className="font-black text-xl text-[#ccc] tracking-tighter italic">RHYTHM<span className="text-[#e06c28]">.OS</span></span>
                 </div>
             </div>
-            
-            {/* Mode Switcher Buttons - Enhanced */}
+            {/* Mode Switcher */}
             <div className="flex bg-[#1a1a1a] p-1 rounded-lg border border-white/10 shadow-inner">
-                <button 
-                    onClick={() => switchScreen('training')}
-                    className={`
-                        flex items-center gap-2 px-3 py-1.5 rounded transition-all font-mono text-[10px] font-bold uppercase tracking-wider
-                        ${screen === 'training' 
-                            ? 'bg-[#e06c28] text-white shadow-[0_1px_4px_rgba(224,108,40,0.4)]' 
-                            : 'text-[#666] hover:text-[#999] hover:bg-[#252525]'}
-                    `}
-                >
-                    <RefreshCw size={14} />
-                    <span>TRAIN</span>
-                </button>
+                <button onClick={() => switchScreen('training')} className={`flex items-center gap-2 px-3 py-1.5 rounded transition-all font-mono text-[10px] font-bold uppercase tracking-wider ${screen === 'training' ? 'bg-[#e06c28] text-white shadow-[0_1px_4px_rgba(224,108,40,0.4)]' : 'text-[#666] hover:text-[#999] hover:bg-[#252525]'}`}><RefreshCw size={14} /><span>TRAIN</span></button>
                 <div className="w-[1px] bg-white/5 my-1 mx-1"></div>
-                <button 
-                    onClick={() => switchScreen('library')}
-                    className={`
-                        flex items-center gap-2 px-3 py-1.5 rounded transition-all font-mono text-[10px] font-bold uppercase tracking-wider
-                        ${screen === 'library' 
-                            ? 'bg-[#e06c28] text-white shadow-[0_1px_4px_rgba(224,108,40,0.4)]' 
-                            : 'text-[#666] hover:text-[#999] hover:bg-[#252525]'}
-                    `}
-                >
-                    <BookOpen size={14} />
-                    <span>LIB</span>
-                </button>
+                <button onClick={() => switchScreen('library')} className={`flex items-center gap-2 px-3 py-1.5 rounded transition-all font-mono text-[10px] font-bold uppercase tracking-wider ${screen === 'library' ? 'bg-[#e06c28] text-white shadow-[0_1px_4px_rgba(224,108,40,0.4)]' : 'text-[#666] hover:text-[#999] hover:bg-[#252525]'}`}><BookOpen size={14} /><span>LIB</span></button>
             </div>
         </div>
 
-        {/* --- MAIN SCREEN AREA --- */}
-        <div className="px-6 mb-6">
-            <div className="bg-[#000] rounded-lg p-1 shadow-[inset_0_2px_10px_rgba(0,0,0,1)] border-b border-white/10">
-                {/* Fixed Aspect Ratio: 3:4 on Mobile, 4:3 on Desktop */}
-                <div className="bg-[#050805] rounded border border-[#222] relative overflow-hidden w-full aspect-[3/4] md:aspect-[4/3] flex flex-col">
+        {/* SCREEN SECTION (Flexible Height) */}
+        <div className="flex-1 px-4 min-h-0 flex flex-col z-10">
+            <div className="bg-[#000] rounded-lg p-1 shadow-[inset_0_2px_10px_rgba(0,0,0,1)] border-b border-white/10 h-full flex flex-col">
+                <div className="bg-[#050805] rounded border border-[#222] relative overflow-hidden w-full h-full flex flex-col">
+                    {/* Screen Effects */}
                     <div className="absolute inset-0 z-20 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.1)_50%)] bg-[length:100%_4px] opacity-30"></div>
                     <div className="absolute inset-0 z-20 pointer-events-none bg-[radial-gradient(circle_at_center,transparent_50%,rgba(0,0,0,0.6)_100%)]"></div>
 
-                    {/* Screen Header Info */}
-                    <div className="absolute top-2 left-3 right-3 flex justify-between text-[#33ff00] font-mono text-[8px] md:text-[9px] z-10 opacity-70 border-b border-[#33ff00]/20 pb-1">
+                    {/* Info Header */}
+                    <div className="shrink-0 flex justify-between px-3 py-2 text-[#33ff00] font-mono text-[9px] z-30 opacity-70 border-b border-[#33ff00]/20">
                         <span>{screen === 'training' ? `MODE: ${difficulty.toUpperCase()}` : 'MODE: LIBRARY'}</span>
                         <span>CLK: {bpm}</span>
                     </div>
 
-                    {/* CONTENT: TRAINING MODE */}
-                    {/* Fixed: Mobile uses 2x2 grid, Desktop uses 1x4 */}
-                    {screen === 'training' && (
-                        <div className="absolute inset-0 top-8 bottom-12 px-2 md:px-4 grid grid-cols-2 grid-rows-2 md:grid-cols-4 md:grid-rows-1 gap-2 md:gap-2 z-10 items-center justify-center">
-                            {cards.map((card, index) => (
-                                <PhosphorCard key={card.uid || index} pattern={card} isNew={animateCards} index={index} />
-                            ))}
-                        </div>
-                    )}
-
-                    {/* CONTENT: LIBRARY MODE */}
-                    {screen === 'library' && (
-                        <div className="absolute inset-0 top-8 bottom-12 px-2 md:px-4 z-10 overflow-y-auto custom-scrollbar">
-                            <div className="grid grid-cols-3 gap-2 pb-4">
-                                {Object.keys(PATTERNS).map((key) => (
-                                    <PhosphorCard 
-                                        key={key} 
-                                        pattern={PATTERNS[key]} 
-                                        isActive={activeLibraryPattern === key}
-                                        onClick={() => handlePatternClick(key)}
-                                        minimal={true}
-                                    />
+                    {/* CONTENT AREA (Flexible) */}
+                    <div className="flex-1 relative z-10 p-2 md:p-4">
+                        {screen === 'training' && (
+                            <div className="w-full h-full grid grid-cols-2 grid-rows-2 md:grid-cols-4 md:grid-rows-1 gap-2">
+                                {cards.map((card, index) => (
+                                    <PhosphorCard key={card.uid || index} pattern={card} isNew={animateCards} index={index} />
                                 ))}
                             </div>
-                        </div>
-                    )}
+                        )}
+                        {screen === 'library' && (
+                            <div className="w-full h-full overflow-y-auto custom-scrollbar pb-8">
+                                <div className="grid grid-cols-3 gap-2">
+                                    {Object.keys(PATTERNS).map((key) => (
+                                        <PhosphorCard key={key} pattern={PATTERNS[key]} isActive={activeLibraryPattern === key} onClick={() => handlePatternClick(key)} minimal={true} />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
 
-                    {/* WAVEFORM COMPONENT - Fixed height ratio */}
-                    <div className="absolute bottom-0 left-0 w-full h-[15%] pointer-events-none z-0 overflow-hidden rounded-b-lg">
+                    {/* Waveform (Fixed Height at Bottom) */}
+                    <div className="h-12 shrink-0 relative z-0">
                          <RetroWaveform isPlaying={isPlaying} beat={beatIndicator} activePattern={activeLibraryPattern} />
                     </div>
                 </div>
             </div>
         </div>
 
-        {/* --- CONTROLS SECTION --- */}
-        <div className="bg-[#222] px-6 py-6 border-t border-black shadow-[inset_0_2px_4px_rgba(0,0,0,0.5)]">
-            
-            {/* Context-Aware Controls */}
-            {screen === 'training' ? (
-                <div className="flex justify-center gap-2 mb-6 bg-[#181818] p-1.5 rounded-lg shadow-inner inline-flex w-full">
+        {/* CONTROLS SECTION (Fixed Height) */}
+        <div className="shrink-0 bg-[#222] px-6 py-6 border-t border-black shadow-[inset_0_2px_4px_rgba(0,0,0,0.5)] z-20">
+            {/* Status Lights */}
+            <div className="flex justify-between items-center mb-4">
+               <div className="flex gap-1">
+                 {[0, 1, 2, 3].map(i => (
+                    <div key={i} className={`w-6 h-1.5 rounded-sm transition-all duration-75 border border-black/30 ${isPlaying && beatIndicator === i ? (i === 0 ? 'bg-red-500 shadow-[0_0_10px_#ef4444]' : 'bg-[#33ff00] shadow-[0_0_10px_#33ff00]') : 'bg-[#1a1a1a]'}`}></div>
+                ))}
+               </div>
+               {/* Difficulty Toggle */}
+               {screen === 'training' && (
+                <div className="flex gap-1 bg-[#181818] p-1 rounded shadow-inner">
                     {['basic', 'advanced', 'expert'].map((lvl) => (
-                        <button
-                            key={lvl}
-                            onClick={() => setDifficulty(lvl)}
-                            className={`
-                                flex-1 py-2 rounded text-[10px] font-bold uppercase transition-all
-                                ${difficulty === lvl 
-                                ? 'bg-[#3a3a3a] text-[#e06c28] shadow-[0_1px_2px_rgba(0,0,0,0.5)] border-t border-white/10' 
-                                : 'text-[#555] hover:text-[#777]'}
-                            `}
-                        >
-                            {lvl}
-                        </button>
+                        <button key={lvl} onClick={() => setDifficulty(lvl)} className={`w-2 h-2 rounded-full transition-all ${difficulty === lvl ? 'bg-[#e06c28] shadow-[0_0_5px_#e06c28]' : 'bg-[#444]'}`} title={lvl}></button>
                     ))}
                 </div>
-            ) : (
-                <div className="mb-6 h-[42px] flex items-center justify-center text-[#555] text-xs font-mono bg-[#181818] rounded-lg shadow-inner">
-                    {activeLibraryPattern ? `PLAYING: ${PATTERNS[activeLibraryPattern].name}` : "SELECT A PATTERN TO AUDITION"}
-                </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                 <Fader 
-                    label="Tempo" 
-                    value={bpm} 
-                    min={40} 
-                    max={180} 
-                    onChange={(e) => setBpm(parseInt(e.target.value))}
-                    onDecrement={() => adjustBpm(-1)}
-                    onIncrement={() => adjustBpm(1)}
-                    unit=" BPM"
-                 />
-                 <Fader 
-                    label="Output Level" 
-                    value={volume} 
-                    min={0} 
-                    max={100} 
-                    onChange={(e) => setVolume(parseInt(e.target.value))}
-                    onDecrement={() => setVolume(Math.max(0, volume - 5))}
-                    onIncrement={() => setVolume(Math.min(100, volume + 5))}
-                    unit="%"
-                 />
+               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-                 <div className="h-16">
-                     <TactileButton onClick={toggleMetronome} active={isPlaying} color={isPlaying ? "orange" : "grey"} className="w-full h-full text-lg">
-                        {isPlaying ? <Pause /> : <Play />}
-                        <span>{isPlaying ? "Stop" : "Start"}</span>
-                     </TactileButton>
-                 </div>
-                 
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                 <Fader label="Tempo" value={bpm} min={40} max={180} onChange={(e) => setBpm(parseInt(e.target.value))} onDecrement={() => adjustBpm(-1)} onIncrement={() => adjustBpm(1)} unit=" BPM" />
+                 <Fader label="Volume" value={volume} min={0} max={100} onChange={(e) => setVolume(parseInt(e.target.value))} onDecrement={() => setVolume(Math.max(0, volume - 5))} onIncrement={() => setVolume(Math.min(100, volume + 5))} unit="%" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 h-14">
+                 <TactileButton onClick={toggleMetronome} active={isPlaying} color={isPlaying ? "orange" : "grey"} className="w-full h-full text-lg">
+                    {isPlaying ? <Pause /> : <Play />}<span>{isPlaying ? "STOP" : "RUN"}</span>
+                 </TactileButton>
                  {screen === 'training' ? (
-                     <div className="h-16">
-                         <TactileButton onClick={generateCards} active={!animateCards} color="orange" className="w-full h-full text-lg">
-                            <RefreshCw className={!animateCards ? 'animate-spin' : ''} />
-                            <span>Shuffle</span>
-                         </TactileButton>
-                     </div>
+                     <TactileButton onClick={generateCards} active={!animateCards} color="orange" className="w-full h-full text-lg"><RefreshCw className={!animateCards ? 'animate-spin' : ''} /><span>SYNC</span></TactileButton>
                  ) : (
-                     <div className="h-16">
-                         <TactileButton onClick={() => handlePatternClick(null)} active={false} color="grey" className="w-full h-full text-lg">
-                            <X />
-                            <span>Mute Pattern</span>
-                         </TactileButton>
-                     </div>
+                     <TactileButton onClick={() => handlePatternClick(null)} active={false} color="grey" className="w-full h-full text-lg"><X /><span>MUTE</span></TactileButton>
                  )}
             </div>
-
         </div>
 
       </div>
-      
       <style>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: #0d120d; 
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #33ff00; 
-          opacity: 0.3;
-          border-radius: 4px;
-        }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #0d120d; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #33ff00; opacity: 0.3; border-radius: 4px; }
       `}</style>
     </div>
   );
