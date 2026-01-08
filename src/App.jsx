@@ -2,10 +2,12 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, Pause, RefreshCw, Volume2, Power, Minus, Plus, Settings, BookOpen, X, PlayCircle } from 'lucide-react';
 
 /**
- * Rhythm Cards Trainer - Field Ops Edition v3.0
- * Changes:
- * - Train Mode (Mobile): Reduced internal card padding from p-8 to p-4.
- * This effectively zooms in/enlarges the rhythm patterns without changing card size or layout.
+ * Rhythm Cards Trainer - Field Ops Edition v3.1 (Scroll Fix)
+ * Fixes:
+ * - Mobile Train Mode: 
+ * - Removed fixed height constraint (h-[85%]).
+ * - Added vertical scrolling (overflow-y-auto) to allow cards to fit on small screens.
+ * - Added bottom padding (pb-32) so bottom cards aren't hidden behind the waveform.
  */
 
 // --- Audio Engine (Unchanged) ---
@@ -200,7 +202,7 @@ const PhosphorCard = ({ pattern, isNew, index, onClick, isActive, minimal = fals
     <div className="absolute inset-0 opacity-10 pointer-events-none" 
         style={{ backgroundImage: 'linear-gradient(rgba(0,0,0,0) 50%, rgba(0,0,0,0.5) 50%)', backgroundSize: '100% 4px' }}></div>
     
-    {/* SVG Container: Changed p-8 back to p-4 to enlarge notes as requested */}
+    {/* SVG Container: p-4 to keep size optimal */}
     <div className={`flex-1 flex items-center justify-center text-[#33ff00] w-full min-h-0 ${minimal ? 'p-2' : 'p-4'}`}
            style={{ filter: (isActive || isPlayingSeq) ? 'drop-shadow(0 0 4px rgba(51, 255, 0, 0.8))' : 'none' }}>
         <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible" preserveAspectRatio="xMidYMid meet">
@@ -330,6 +332,7 @@ export default function RhythmCardsApp() {
     if (isPlaying) {
       metronomeRef.current.stop();
       setIsPlaying(false);
+      setIsSequencePlaying(false); // Reset sequence state on stop
       setBeatIndicator(0);
     } else {
       metronomeRef.current.setTempo(bpm);
@@ -422,22 +425,24 @@ export default function RhythmCardsApp() {
 
                     <div className="flex-1 relative z-10 p-2 md:p-4">
                         {screen === 'training' && (
-                            // UPDATED: h-[85%] to pull bottom cards up, px-6 to shrink card width
-                            <div className="w-full h-[85%] grid grid-cols-2 grid-rows-2 md:grid-cols-4 md:grid-rows-1 gap-4 md:gap-4 px-6 md:px-0"> 
-                                {cards.map((card, index) => (
-                                    <PhosphorCard 
-                                        key={card.uid || index} 
-                                        pattern={card} 
-                                        isNew={animateCards} 
-                                        index={index}
-                                        isPlayingSeq={isSequencePlaying && beatIndicator === index}
-                                    />
-                                ))}
+                            // ENABLED SCROLLING: overflow-y-auto added. Removed h-85%. Added pb-32.
+                            <div className="w-full h-full overflow-y-auto custom-scrollbar pb-32">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-6 md:px-0 pt-4">
+                                    {cards.map((card, index) => (
+                                        <PhosphorCard 
+                                            key={card.uid || index} 
+                                            pattern={card} 
+                                            isNew={animateCards} 
+                                            index={index}
+                                            isPlayingSeq={isSequencePlaying && beatIndicator === index}
+                                        />
+                                    ))}
+                                </div>
                             </div>
                         )}
                         {screen === 'library' && (
-                            <div className="w-full h-full overflow-y-auto custom-scrollbar pb-48"> {/* Significantly increased bottom padding */}
-                                <div className="grid grid-cols-3 gap-3 px-2"> {/* Increased gap and padding */}
+                            <div className="w-full h-full overflow-y-auto custom-scrollbar pb-48"> 
+                                <div className="grid grid-cols-3 gap-3 px-2">
                                     {Object.keys(PATTERNS).map((key) => (
                                         <PhosphorCard key={key} pattern={PATTERNS[key]} isActive={activeLibraryPattern === key} onClick={() => handlePatternClick(key)} minimal={true} />
                                     ))}
